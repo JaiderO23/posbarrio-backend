@@ -13,10 +13,12 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(csrf -> csrf.disable())  // Deshabilitar CSRF para desarrollo
+                .csrf(csrf -> csrf.disable())  // Deshabilitar CSRF
                 .authorizeHttpRequests(auth -> auth
-                        .anyRequest().permitAll()  // Permitir todas las peticiones sin autenticación
-                );
+                        .requestMatchers("/**").permitAll()  // Permitir TODAS las rutas
+                )
+                .formLogin(form -> form.disable())  // Deshabilitar login form
+                .httpBasic(basic -> basic.disable());  // Deshabilitar basic auth
 
         return http.build();
     }
