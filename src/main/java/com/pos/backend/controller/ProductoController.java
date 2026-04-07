@@ -1,7 +1,9 @@
 package com.pos.backend.controller;
 
+import com.pos.backend.dto.ProductoRequest;
 import com.pos.backend.model.Producto;
 import com.pos.backend.service.ProductoService;
+import com.pos.backend.dto.request.*;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -62,16 +64,16 @@ public class ProductoController {
     }
 
     @PostMapping
-    public ResponseEntity<Producto> crearProducto(@Valid @RequestBody Producto producto) {
-        Producto nuevoProducto = productoService.crearProducto(producto);
+    public ResponseEntity<Producto> crearProducto(@Valid @RequestBody ProductoRequest request) {
+        Producto nuevoProducto = productoService.crearProducto(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(nuevoProducto);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<Producto> actualizarProducto(
             @PathVariable Long id,
-            @Valid @RequestBody Producto producto) {
-        Producto productoActualizado = productoService.actualizarProducto(id, producto);
+            @Valid @RequestBody ProductoRequest request) {
+        Producto productoActualizado = productoService.actualizarProducto(id, request);
         return ResponseEntity.ok(productoActualizado);
     }
 

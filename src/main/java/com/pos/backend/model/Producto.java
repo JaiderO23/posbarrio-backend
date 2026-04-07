@@ -40,6 +40,11 @@ public class Producto {
     @Column(columnDefinition = "TEXT")
     private String descripcion;
 
+    // ✅ NUEVO: Relación con Categoría
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "categoria_id")
+    private Categoria categoria;
+
     @DecimalMin(value = "0.0", inclusive = true, message = "El precio de compra debe ser mayor o igual a 0")
     @Column(name = "precio_compra", precision = 12, scale = 2)
     private BigDecimal precioCompra = BigDecimal.ZERO;
