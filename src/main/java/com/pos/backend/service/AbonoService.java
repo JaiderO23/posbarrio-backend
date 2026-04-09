@@ -106,105 +106,73 @@ public class AbonoService {
         return abonoGuardado;
     }
 
-    /**
-     * Obtener todos los abonos
-     */
+
     public List<Abono> obtenerTodos() {
         return abonoRepository.findAll();
     }
 
-    /**
-     * Obtener abono por ID
-     */
+
     public Abono obtenerPorId(Long id) {
         return abonoRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Abono no encontrado con ID: " + id));
     }
 
-    /**
-     * Obtener abono por UUID
-     */
+
     public Abono obtenerPorUuid(UUID uuid) {
         return abonoRepository.findByUuid(uuid)
                 .orElseThrow(() -> new RuntimeException("Abono no encontrado con UUID: " + uuid));
     }
 
-    /**
-     * Obtener abonos de un cliente
-     */
+
     public List<Abono> obtenerPorCliente(Long clienteId) {
         return abonoRepository.findByClienteIdOrderByFechaDesc(clienteId);
     }
 
-    /**
-     * Obtener abonos de una venta
-     */
     public List<Abono> obtenerPorVenta(Long ventaId) {
         return abonoRepository.findByVentaId(ventaId);
     }
 
-    /**
-     * Obtener abonos de un usuario (cajero)
-     */
     public List<Abono> obtenerPorUsuario(Long usuarioId) {
         return abonoRepository.findByUsuarioId(usuarioId);
     }
 
-    /**
-     * Obtener abonos del día
-     */
     public List<Abono> obtenerAbonosHoy() {
         return abonoRepository.findAbonosDelDia();
     }
 
-    /**
-     * Obtener abonos en un rango de fechas
-     */
+
     public List<Abono> obtenerPorRangoFechas(LocalDateTime inicio, LocalDateTime fin) {
         return abonoRepository.findByFechaBetween(inicio, fin);
     }
 
-    /**
-     * Sumar total de abonos de un cliente
-     */
+
     public BigDecimal totalAbonosCliente(Long clienteId) {
         return abonoRepository.sumarAbonosCliente(clienteId);
     }
 
-    /**
-     * Sumar total de abonos de una venta
-     */
+
     public BigDecimal totalAbonosVenta(Long ventaId) {
         return abonoRepository.sumarAbonosVenta(ventaId);
     }
 
-    /**
-     * Obtener saldo pendiente de una venta
-     */
+
     public BigDecimal saldoPendienteVenta(Long ventaId) {
         Venta venta = ventaService.obtenerPorId(ventaId);
         BigDecimal totalPagado = abonoRepository.sumarAbonosVenta(ventaId);
         return venta.getTotal().subtract(totalPagado);
     }
 
-    /**
-     * Contar abonos del día
-     */
+
     public Long contarAbonosDelDia() {
         return abonoRepository.contarAbonosDelDia();
     }
 
-    /**
-     * Sumar total de abonos del día
-     */
+
     public BigDecimal totalAbonosDelDia() {
         return abonoRepository.sumarAbonosDelDia();
     }
 
-    /**
-     * Cancelar un abono (revertir el pago)
-     * - Aumenta nuevamente la deuda del cliente
-     */
+
     public void cancelarAbono(Long id, String motivo) {
         Abono abono = obtenerPorId(id);
 

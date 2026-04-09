@@ -10,6 +10,8 @@ import com.pos.backend.repository.VentaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.pos.backend.model.Producto;
+import com.pos.backend.repository.ProductoRepository;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -26,6 +28,7 @@ public class VentaService {
     private final VentaRepository ventaRepository;
     private final ClienteService clienteService;
     private final UsuarioService usuarioService;
+    private final ProductoRepository productoRepository;
 
 
     // CREAR VENTA COMPLETA
@@ -65,11 +68,33 @@ public class VentaService {
             }
         }
 
-        // 5. Establecer relación bidireccional con detalles Y calcular subtotales
+        // 5. Validar stock y reducir inventario
         for (DetalleVenta detalle : venta.getDetalles()) {
-            detalle.setVenta(venta);
+            // Obtener el producto
+            if (detalle.getProducto() == null || detalle.getProducto().getId() == null) {
+                throw new RuntimeException("Cada detalle debe tener un producto válido");
+            }
 
-            // Calcular subtotal manualmente (antes de @PrePersist)
+            Producto producto = productoRepository.findById(detalle.getProducto().getId())
+                    .orElseThrow(() -> new RuntimeException("Producto no encontrado con ID: " + detalle.getProducto().getId()));
+
+            // Validar stock disponible
+            if (producto.getStockActual() < detalle.getCantidad()) {
+                throw new RuntimeException(
+                        String.format("Stock insuficiente para '%s'. Disponible: %d, Solicitado: %d",
+                                producto.getNombre(), producto.getStockActual(), detalle.getCantidad())
+                );
+            }
+
+            // Reducir stock
+            producto.setStockActual(producto.getStockActual() - detalle.getCantidad());
+            productoRepository.save(producto);
+
+            // Establecer relación con venta
+            detalle.setVenta(venta);
+            detalle.setProducto(producto);
+
+            // Calcular subtotal manualmente
             if (detalle.getSubtotal() == null) {
                 BigDecimal subtotal = detalle.getPrecioUnitario()
                         .multiply(new BigDecimal(detalle.getCantidad()));
