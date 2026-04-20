@@ -47,8 +47,10 @@ public class ReporteController {
     }
 
     @GetMapping("/ventas/por-metodo-pago")
-    public ResponseEntity<List<VentaPorMetodoPagoDTO>> ventasPorMetodoPago() {
-        List<VentaPorMetodoPagoDTO> reporte = reporteService.ventasPorMetodoPago();
+    public ResponseEntity<List<VentaPorMetodoPagoDTO>> ventasPorMetodoPago(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime inicio,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fin) {
+        List<VentaPorMetodoPagoDTO> reporte = reporteService.ventasPorMetodoPago(inicio, fin);
         return ResponseEntity.ok(reporte);
     }
 

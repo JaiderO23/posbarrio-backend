@@ -2,7 +2,8 @@ package com.pos.backend.enums;
 
 public enum Rol {
     ADMIN("Administrador - Acceso total al sistema"),
-    EMPLEADO("Empleado - Ventas, abonos y consultas");
+    PROPIETARIO("Propietario - Gestion y reportes"),
+    CAJERO("Cajero - Ventas y consultas basicas");
 
     private final String descripcion;
 

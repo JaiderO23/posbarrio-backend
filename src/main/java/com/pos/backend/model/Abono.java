@@ -1,5 +1,6 @@
 package com.pos.backend.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.pos.backend.enums.MetodoPago;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.DecimalMin;
@@ -49,6 +50,10 @@ public class Abono {
     @NotNull(message = "El monto es obligatorio")
     @DecimalMin(value = "0.01", message = "El monto debe ser mayor a cero")
     private BigDecimal monto;
+
+    @JsonIgnore
+    @Column(name = "sincronizado_desde", length = 100)
+    private String sincronizadoDesde;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

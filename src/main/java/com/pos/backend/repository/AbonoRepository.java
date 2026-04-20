@@ -66,4 +66,7 @@ public interface AbonoRepository extends JpaRepository<Abono, Long> {
     // Sumar total de abonos del día - NATIVE QUERY
     @Query(value = "SELECT COALESCE(SUM(a.monto), 0) FROM abonos a WHERE DATE(a.fecha) = CURRENT_DATE", nativeQuery = true)
     BigDecimal sumarAbonosDelDia();
+
+    @Query(value = "SELECT * FROM abonos WHERE sincronizado_desde IS NULL OR sincronizado_desde != 'SINCRONIZADO'", nativeQuery = true)
+    List<Abono> findPendientesSincronizacion();
 }

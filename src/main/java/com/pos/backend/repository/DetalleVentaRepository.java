@@ -31,18 +31,20 @@ public interface DetalleVentaRepository extends JpaRepository<DetalleVenta, Long
     List<DetalleVenta> findByProductoId(Long productoId);
 
     @Query(value = """
-        SELECT 
-            p.id as producto_id,
-            p.nombre as nombre_producto,
-            SUM(dv.cantidad) as cantidad_vendida,
-            SUM(dv.subtotal) as total_vendido
-        FROM detalle_venta dv
-        JOIN productos p ON dv.producto_id = p.id
-        JOIN ventas v ON dv.venta_id = v.id
-        WHERE v.estado = 'COMPLETADA'
-        GROUP BY p.id, p.nombre
-        ORDER BY cantidad_vendida DESC
-        LIMIT :limite
-        """, nativeQuery = true)
+    SELECT 
+        p.id as producto_id,
+        p.nombre as nombre_producto,
+        c.nombre as nombre_categoria,
+        SUM(dv.cantidad) as cantidad_vendida,
+        SUM(dv.subtotal) as total_vendido
+    FROM detalle_venta dv
+    JOIN productos p ON dv.producto_id = p.id
+    LEFT JOIN categorias c ON p.categoria_id = c.id
+    JOIN ventas v ON dv.venta_id = v.id
+    WHERE v.estado = 'COMPLETADA'
+    GROUP BY p.id, p.nombre, c.nombre
+    ORDER BY cantidad_vendida DESC
+    LIMIT :limite
+    """, nativeQuery = true)
     List<Object[]> findProductosMasVendidos(@Param("limite") int limite);
 }

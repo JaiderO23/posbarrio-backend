@@ -141,4 +141,22 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
         ORDER BY total_vendido DESC
         """, nativeQuery = true)
     List<Object> findVentasPorUsuario(@Param("inicio") LocalDateTime inicio, @Param("fin") LocalDateTime fin);
+
+    @Query(value = "SELECT * FROM ventas WHERE sincronizado_desde IS NULL OR sincronizado_desde != 'SINCRONIZADO'", nativeQuery = true)
+    List<Venta> findPendientesSincronizacion();
+
+    @Query(value = """
+    SELECT 
+        metodo_pago,
+        COUNT(*) as cantidad,
+        COALESCE(SUM(total), 0) as total
+    FROM ventas
+    WHERE estado = 'COMPLETADA'
+    AND fecha BETWEEN :inicio AND :fin
+    GROUP BY metodo_pago
+    ORDER BY total DESC
+    """, nativeQuery = true)
+    List<Object[]> findVentasPorMetodoPagoEnRango(
+            @Param("inicio") LocalDateTime inicio,
+            @Param("fin") LocalDateTime fin);
 }

@@ -132,4 +132,14 @@ public class UsuarioController {
         usuarioService.eliminarUsuarioPermanente(id);
         return ResponseEntity.noContent().build();
     }
+
+    // PATCH - Activar usuario
+    @PatchMapping("/{id}/activar")
+    public ResponseEntity<Usuario> activarUsuario(@PathVariable Long id) {
+        Usuario usuario = usuarioService.obtenerPorId(id);
+        usuario.setActivo(true);
+        usuario.setVersion(usuario.getVersion() + 1);
+        Usuario usuarioActualizado = usuarioService.actualizarUsuario(id, usuario);
+        return ResponseEntity.ok(usuarioActualizado);
+    }
 }

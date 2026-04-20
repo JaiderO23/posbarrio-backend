@@ -3,6 +3,7 @@ package com.pos.backend.repository;
 import com.pos.backend.enums.Rol;
 import com.pos.backend.model.Usuario;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -29,4 +30,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
     // Verificar si existe por nombre de usuario
     boolean existsByNombreUsuario(String nombreUsuario);
+
+    @Query(value = "SELECT * FROM usuarios WHERE sincronizado_desde IS NULL OR sincronizado_desde != 'SINCRONIZADO'", nativeQuery = true)
+    List<Usuario> findPendientesSincronizacion();
 }

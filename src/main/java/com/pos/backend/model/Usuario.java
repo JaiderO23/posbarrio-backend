@@ -90,6 +90,6 @@ public class Usuario {
     // Método de utilidad: ¿Es empleado?
     @Transient
     public boolean esEmpleado() {
-        return this.rol == Rol.EMPLEADO;
+        return this.rol == Rol.CAJERO;
     }
 }

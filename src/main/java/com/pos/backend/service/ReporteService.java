@@ -38,10 +38,11 @@ public class ReporteService {
 
         return resultados.stream()
                 .map(row -> new ProductoVendidoDTO(
-                        ((Number) row[0]).longValue(),      // productoId
-                        (String) row[1],                     // nombreProducto
-                        ((Number) row[2]).longValue(),       // cantidadVendida
-                        (BigDecimal) row[3]                  // totalVendido
+                        ((Number) row[0]).longValue(),
+                        (String) row[1],
+                        (String) row[2],
+                        ((Number) row[3]).longValue(),
+                        (BigDecimal) row[4]
                 ))
                 .collect(Collectors.toList());
     }
@@ -99,10 +100,15 @@ public class ReporteService {
     /**
      * REPORTE 5: Ventas por método de pago
      */
-    public List<VentaPorMetodoPagoDTO> ventasPorMetodoPago() {
-        List<Object[]> resultados = ventaRepository.findVentasPorMetodoPago();
+    public List<VentaPorMetodoPagoDTO> ventasPorMetodoPago(LocalDateTime inicio, LocalDateTime fin) {
+        List<Object[]> resultados;
 
-        // Calcular total general para porcentajes
+        if (inicio != null && fin != null) {
+            resultados = ventaRepository.findVentasPorMetodoPagoEnRango(inicio, fin);
+        } else {
+            resultados = ventaRepository.findVentasPorMetodoPago();
+        }
+
         BigDecimal totalGeneral = resultados.stream()
                 .map(row -> (BigDecimal) row[2])
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -113,7 +119,6 @@ public class ReporteService {
                     Long cantidad = ((Number) row[1]).longValue();
                     BigDecimal total = (BigDecimal) row[2];
 
-                    // Calcular porcentaje
                     BigDecimal porcentaje = BigDecimal.ZERO;
                     if (totalGeneral.compareTo(BigDecimal.ZERO) > 0) {
                         porcentaje = total.divide(totalGeneral, 4, RoundingMode.HALF_UP)
@@ -121,11 +126,7 @@ public class ReporteService {
                                 .setScale(2, RoundingMode.HALF_UP);
                     }
 
-                    VentaPorMetodoPagoDTO dto = new VentaPorMetodoPagoDTO(
-                            metodoPago,
-                            cantidad,
-                            total
-                    );
+                    VentaPorMetodoPagoDTO dto = new VentaPorMetodoPagoDTO(metodoPago, cantidad, total);
                     dto.setPorcentaje(porcentaje);
                     return dto;
                 })
@@ -158,7 +159,9 @@ public class ReporteService {
                             producto.getStockActual(),
                             producto.getStockMinimo(),
                             faltante,
-                            estado
+                            estado,
+                            producto.getPrecioCompra(),
+                            producto.getCategoria() != null ? producto.getCategoria().getNombre() : "-"
                     );
                 })
                 .collect(Collectors.toList());
