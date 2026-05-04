@@ -4,6 +4,7 @@ import com.pos.backend.model.Categoria;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -31,4 +32,6 @@ public interface CategoriaRepository extends JpaRepository<Categoria, Long> {
 
     // Buscar por parte del nombre
     List<Categoria> findByNombreContainingIgnoreCase(String nombre);
+
+    List<Categoria> findAllByUuidIn(Collection<UUID> uuids);
 }

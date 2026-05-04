@@ -69,4 +69,5 @@ public interface AbonoRepository extends JpaRepository<Abono, Long> {
 
     @Query(value = "SELECT * FROM abonos WHERE sincronizado_desde IS NULL OR sincronizado_desde != 'SINCRONIZADO'", nativeQuery = true)
     List<Abono> findPendientesSincronizacion();
+
 }

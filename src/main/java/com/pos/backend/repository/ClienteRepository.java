@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,6 +16,9 @@ public interface ClienteRepository extends JpaRepository<Cliente, Long> {
 
     // Buscar por UUID
     Optional<Cliente> findByUuid(UUID uuid);
+
+    // Para sincronización masiva
+    List<Cliente> findAllByUuidIn(Collection<UUID> uuids);
 
     // Buscar por número de documento
     Optional<Cliente> findByNumeroDocumento(String numeroDocumento);
@@ -31,10 +35,10 @@ public interface ClienteRepository extends JpaRepository<Cliente, Long> {
     List<Cliente> findByActivoTrue();
 
     // Buscar clientes con deuda
-    List<Cliente> findBySaldoDeudaGreaterThan(java.math.BigDecimal monto);
+    List<Cliente> findBySaldoDeudaGreaterThan(BigDecimal monto);
 
     // Buscar clientes con crédito habilitado
-    List<Cliente> findByLimiteCreditoGreaterThan(java.math.BigDecimal monto);
+    List<Cliente> findByLimiteCreditoGreaterThan(BigDecimal monto);
 
     // Verificar si existe por documento
     boolean existsByNumeroDocumento(String numeroDocumento);

@@ -15,8 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.sql.*;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -58,7 +58,7 @@ public class SincronizacionService {
         }
     }
 
-    @Scheduled(fixedDelay = 3000)
+    @Scheduled(fixedDelay = 300000)
     @Transactional
     public void sincronizar() {
         if (!hayInternet() || !hayConexionRemota()) {
@@ -85,6 +85,7 @@ public class SincronizacionService {
             descargarClientes(remota);
             descargarUsuarios(remota);
             descargarVentas(remota);
+            descargarAbonos(remota);
 
             System.out.println("Sincronización completada ✓");
         } catch (Exception e) {
@@ -360,138 +361,290 @@ public class SincronizacionService {
 
     private void descargarCategorias(Connection remota) throws SQLException {
         String sql = "SELECT uuid, nombre, descripcion, activo, creado_en, actualizado_en, version FROM categorias";
-        int nuevas = 0;
+
+        // 1) Recolectar TODAS las filas remotas en memoria
+        List<Map<String, Object>> remotos = new ArrayList<>();
         try (PreparedStatement ps = remota.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
-                UUID uuid = UUID.fromString(rs.getString("uuid"));
-                if (categoriaRepository.findByUuid(uuid).isEmpty()) {
-                    Categoria c = new Categoria();
-                    c.setUuid(uuid);
-                    c.setNombre(rs.getString("nombre"));
-                    c.setDescripcion(rs.getString("descripcion"));
-                    c.setActivo(rs.getBoolean("activo"));
-                    c.setCreadoEn(rs.getTimestamp("creado_en").toLocalDateTime());
-                    c.setActualizadoEn(rs.getTimestamp("actualizado_en").toLocalDateTime());
-                    c.setVersion(rs.getInt("version"));
-                    c.setSincronizadoDesde(SINCRONIZADO);
-                    categoriaRepository.save(c);
-                    nuevas++;
-                }
+                Map<String, Object> row = new HashMap<>();
+                row.put("uuid", UUID.fromString(rs.getString("uuid")));
+                row.put("nombre", rs.getString("nombre"));
+                row.put("descripcion", rs.getString("descripcion"));
+                row.put("activo", rs.getBoolean("activo"));
+                row.put("creadoEn", rs.getTimestamp("creado_en").toLocalDateTime());
+                row.put("actualizadoEn", rs.getTimestamp("actualizado_en").toLocalDateTime());
+                row.put("version", rs.getInt("version"));
+                remotos.add(row);
             }
         }
-        System.out.println("Categorías descargadas de Supabase: " + nuevas);
+
+        if (remotos.isEmpty()) {
+            System.out.println("Categorías → nuevas: 0");
+            return;
+        }
+
+        // 2) UNA sola query a la BD local
+        Set<UUID> uuids = remotos.stream().map(r -> (UUID) r.get("uuid")).collect(Collectors.toSet());
+        Set<UUID> existentes = categoriaRepository.findAllByUuidIn(uuids).stream()
+                .map(Categoria::getUuid).collect(Collectors.toSet());
+
+        // 3) Insertar solo los que no existen
+        int nuevas = 0;
+        for (Map<String, Object> r : remotos) {
+            UUID uuid = (UUID) r.get("uuid");
+            if (existentes.contains(uuid)) continue;
+
+            Categoria c = new Categoria();
+            c.setUuid(uuid);
+            c.setNombre((String) r.get("nombre"));
+            c.setDescripcion((String) r.get("descripcion"));
+            c.setActivo((Boolean) r.get("activo"));
+            c.setCreadoEn((LocalDateTime) r.get("creadoEn"));
+            c.setActualizadoEn((LocalDateTime) r.get("actualizadoEn"));
+            c.setVersion((Integer) r.get("version"));
+            c.setSincronizadoDesde(SINCRONIZADO);
+            categoriaRepository.save(c);
+            nuevas++;
+        }
+
+        System.out.println("Categorías → nuevas: " + nuevas);
     }
 
     private void descargarProductos(Connection remota) throws SQLException {
         String sql = """
-            SELECT p.uuid, p.nombre, p.descripcion, p.codigo_barras, p.precio_compra, p.precio_venta,
-                   p.stock_actual, p.stock_minimo, p.activo, p.creado_en, p.actualizado_en, p.version,
-                   c.uuid as categoria_uuid
-            FROM productos p
-            LEFT JOIN categorias c ON p.categoria_id = c.id
-            """;
-        int nuevos = 0;
+        SELECT p.uuid, p.nombre, p.descripcion, p.codigo_barras, p.precio_compra, p.precio_venta,
+               p.stock_actual, p.stock_minimo, p.activo, p.creado_en, p.actualizado_en, p.version,
+               c.uuid as categoria_uuid
+        FROM productos p
+        LEFT JOIN categorias c ON p.categoria_id = c.id
+        """;
+
+        // 1) Recolectar todo lo remoto en memoria
+        List<Map<String, Object>> remotos = new ArrayList<>();
+        Set<UUID> categoriaUuids = new HashSet<>();
         try (PreparedStatement ps = remota.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
-                UUID uuid = UUID.fromString(rs.getString("uuid"));
-                if (productoRepository.findByUuid(uuid).isEmpty()) {
-                    Producto p = new Producto();
-                    p.setUuid(uuid);
-                    p.setNombre(rs.getString("nombre"));
-                    p.setDescripcion(rs.getString("descripcion"));
-                    p.setCodigoBarras(rs.getString("codigo_barras"));
-                    p.setPrecioCompra(rs.getBigDecimal("precio_compra"));
-                    p.setPrecioVenta(rs.getBigDecimal("precio_venta"));
-                    p.setStockActual(rs.getInt("stock_actual"));
-                    p.setStockMinimo(rs.getInt("stock_minimo"));
-                    p.setActivo(rs.getBoolean("activo"));
-                    p.setCreadoEn(rs.getTimestamp("creado_en").toLocalDateTime());
-                    p.setActualizadoEn(rs.getTimestamp("actualizado_en").toLocalDateTime());
-                    p.setVersion(rs.getInt("version"));
-                    p.setSincronizadoDesde(SINCRONIZADO);
+                Map<String, Object> row = new HashMap<>();
+                row.put("uuid", UUID.fromString(rs.getString("uuid")));
+                row.put("nombre", rs.getString("nombre"));
+                row.put("descripcion", rs.getString("descripcion"));
+                row.put("codigoBarras", rs.getString("codigo_barras"));
+                row.put("precioCompra", rs.getBigDecimal("precio_compra"));
+                row.put("precioVenta", rs.getBigDecimal("precio_venta"));
+                row.put("stockActual", rs.getInt("stock_actual"));
+                row.put("stockMinimo", rs.getInt("stock_minimo"));
+                row.put("activo", rs.getBoolean("activo"));
+                row.put("creadoEn", rs.getTimestamp("creado_en").toLocalDateTime());
+                row.put("actualizadoEn", rs.getTimestamp("actualizado_en").toLocalDateTime());
+                row.put("version", rs.getInt("version"));
 
-                    String catUuid = rs.getString("categoria_uuid");
-                    if (catUuid != null) {
-                        categoriaRepository.findByUuid(UUID.fromString(catUuid))
-                                .ifPresent(p::setCategoria);
-                    }
-                    productoRepository.save(p);
-                    nuevos++;
+                String catUuid = rs.getString("categoria_uuid");
+                if (catUuid != null) {
+                    UUID cu = UUID.fromString(catUuid);
+                    row.put("categoriaUuid", cu);
+                    categoriaUuids.add(cu);
                 }
+                remotos.add(row);
             }
         }
-        System.out.println("Productos descargados de Supabase: " + nuevos);
-    }
 
+        if (remotos.isEmpty()) {
+            System.out.println("Productos → nuevos: 0");
+            return;
+        }
+
+        // 2) Cargar productos existentes en UNA query
+        Set<UUID> productoUuids = remotos.stream().map(r -> (UUID) r.get("uuid")).collect(Collectors.toSet());
+        Set<UUID> existentes = productoRepository.findAllByUuidIn(productoUuids).stream()
+                .map(Producto::getUuid).collect(Collectors.toSet());
+
+        // 3) Cargar categorías relacionadas en UNA query (en lugar de N queries)
+        Map<UUID, Categoria> mapaCategorias = categoriaRepository.findAllByUuidIn(categoriaUuids).stream()
+                .collect(Collectors.toMap(Categoria::getUuid, c -> c));
+
+        // 4) Insertar solo los nuevos usando el mapa en memoria
+        int nuevos = 0;
+        for (Map<String, Object> r : remotos) {
+            UUID uuid = (UUID) r.get("uuid");
+            if (existentes.contains(uuid)) continue;
+
+            Producto p = new Producto();
+            p.setUuid(uuid);
+            p.setNombre((String) r.get("nombre"));
+            p.setDescripcion((String) r.get("descripcion"));
+            p.setCodigoBarras((String) r.get("codigoBarras"));
+            p.setPrecioCompra((BigDecimal) r.get("precioCompra"));
+            p.setPrecioVenta((BigDecimal) r.get("precioVenta"));
+            p.setStockActual((Integer) r.get("stockActual"));
+            p.setStockMinimo((Integer) r.get("stockMinimo"));
+            p.setActivo((Boolean) r.get("activo"));
+            p.setCreadoEn((LocalDateTime) r.get("creadoEn"));
+            p.setActualizadoEn((LocalDateTime) r.get("actualizadoEn"));
+            p.setVersion((Integer) r.get("version"));
+            p.setSincronizadoDesde(SINCRONIZADO);
+
+            UUID catUuid = (UUID) r.get("categoriaUuid");
+            if (catUuid != null) {
+                Categoria cat = mapaCategorias.get(catUuid);
+                if (cat != null) p.setCategoria(cat);
+            }
+
+            productoRepository.save(p);
+            nuevos++;
+        }
+
+        System.out.println("Productos → nuevos: " + nuevos);
+    }
     private void descargarClientes(Connection remota) throws SQLException {
         String sql = """
-            SELECT uuid, nombre, apellido, tipo_documento, numero_documento, telefono, email,
-                   direccion, limite_credito, saldo_deuda, activo, creado_en, actualizado_en, version
-            FROM clientes
-            """;
-        int nuevos = 0;
+        SELECT uuid, nombre, apellido, tipo_documento, numero_documento, telefono, email,
+               direccion, limite_credito, saldo_deuda, activo, creado_en, actualizado_en, version
+        FROM clientes
+        """;
+
+        List<Map<String, Object>> remotos = new ArrayList<>();
         try (PreparedStatement ps = remota.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
             while (rs.next()) {
-                UUID uuid = UUID.fromString(rs.getString("uuid"));
-                if (clienteRepository.findByUuid(uuid).isEmpty()) {
-                    Cliente c = new Cliente();
-                    c.setUuid(uuid);
-                    c.setNombre(rs.getString("nombre"));
-                    c.setApellido(rs.getString("apellido"));
-                    String tipoDoc = rs.getString("tipo_documento");
-                    if (tipoDoc != null) c.setTipoDocumento(TipoDocumento.valueOf(tipoDoc));
-                    c.setNumeroDocumento(rs.getString("numero_documento"));
-                    c.setTelefono(rs.getString("telefono"));
-                    c.setEmail(rs.getString("email"));
-                    c.setDireccion(rs.getString("direccion"));
-                    c.setLimiteCredito(rs.getBigDecimal("limite_credito"));
-                    c.setSaldoDeuda(rs.getBigDecimal("saldo_deuda"));
-                    c.setActivo(rs.getBoolean("activo"));
-                    c.setCreadoEn(rs.getTimestamp("creado_en").toLocalDateTime());
-                    c.setActualizadoEn(rs.getTimestamp("actualizado_en").toLocalDateTime());
-                    c.setVersion(rs.getInt("version"));
-                    c.setSincronizadoDesde(SINCRONIZADO);
-                    clienteRepository.save(c);
-                    nuevos++;
-                }
+                Map<String, Object> row = new HashMap<>();
+                row.put("uuid", UUID.fromString(rs.getString("uuid")));
+                row.put("nombre", rs.getString("nombre"));
+                row.put("apellido", rs.getString("apellido"));
+                row.put("tipoDocumento", rs.getString("tipo_documento"));
+                row.put("numeroDocumento", rs.getString("numero_documento"));
+                row.put("telefono", rs.getString("telefono"));
+                row.put("email", rs.getString("email"));
+                row.put("direccion", rs.getString("direccion"));
+                row.put("limiteCredito", rs.getBigDecimal("limite_credito"));
+                row.put("saldoDeuda", rs.getBigDecimal("saldo_deuda"));
+                row.put("activo", rs.getBoolean("activo"));
+                row.put("creadoEn", rs.getTimestamp("creado_en").toLocalDateTime());
+                row.put("actualizadoEn", rs.getTimestamp("actualizado_en").toLocalDateTime());
+                row.put("version", rs.getInt("version"));
+                remotos.add(row);
             }
         }
-        System.out.println("Clientes descargados de Supabase: " + nuevos);
+
+        if (remotos.isEmpty()) {
+            System.out.println("Clientes → nuevos: 0");
+            return;
+        }
+
+        Set<UUID> uuids = remotos.stream().map(r -> (UUID) r.get("uuid")).collect(Collectors.toSet());
+        Set<UUID> existentes = clienteRepository.findAllByUuidIn(uuids).stream()
+                .map(Cliente::getUuid).collect(Collectors.toSet());
+
+        int nuevos = 0;
+        for (Map<String, Object> r : remotos) {
+            UUID uuid = (UUID) r.get("uuid");
+            if (existentes.contains(uuid)) continue;
+
+            Cliente c = new Cliente();
+            c.setUuid(uuid);
+            c.setNombre((String) r.get("nombre"));
+            c.setApellido((String) r.get("apellido"));
+            String tipoDoc = (String) r.get("tipoDocumento");
+            if (tipoDoc != null) c.setTipoDocumento(TipoDocumento.valueOf(tipoDoc));
+            c.setNumeroDocumento((String) r.get("numeroDocumento"));
+            c.setTelefono((String) r.get("telefono"));
+            c.setEmail((String) r.get("email"));
+            c.setDireccion((String) r.get("direccion"));
+            c.setLimiteCredito((BigDecimal) r.get("limiteCredito"));
+            c.setSaldoDeuda((BigDecimal) r.get("saldoDeuda"));
+            c.setActivo((Boolean) r.get("activo"));
+            c.setCreadoEn((LocalDateTime) r.get("creadoEn"));
+            c.setActualizadoEn((LocalDateTime) r.get("actualizadoEn"));
+            c.setVersion((Integer) r.get("version"));
+            c.setSincronizadoDesde(SINCRONIZADO);
+            clienteRepository.save(c);
+            nuevos++;
+        }
+
+        System.out.println("Clientes → nuevos: " + nuevos);
     }
 
     private void descargarUsuarios(Connection remota) throws SQLException {
         String sql = """
-            SELECT uuid, nombre_usuario, contraseña, nombre_completo, rol, activo,
-                   creado_en, actualizado_en, version
-            FROM usuarios
-            """;
+        SELECT uuid, nombre_usuario, contraseña, nombre_completo, rol, activo,
+               creado_en, actualizado_en, version
+        FROM usuarios
+        """;
         int nuevos = 0;
+        int actualizados = 0;
+        int adoptados = 0;
+
         try (PreparedStatement ps = remota.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
+
             while (rs.next()) {
                 UUID uuid = UUID.fromString(rs.getString("uuid"));
-                if (usuarioRepository.findByUuid(uuid).isEmpty()) {
-                    Usuario u = new Usuario();
-                    u.setUuid(uuid);
-                    u.setNombreUsuario(rs.getString("nombre_usuario"));
-                    u.setContraseña(rs.getString("contraseña"));
-                    u.setNombreCompleto(rs.getString("nombre_completo"));
-                    String rol = rs.getString("rol");
-                    if (rol != null) u.setRol(Rol.valueOf(rol));
-                    u.setActivo(rs.getBoolean("activo"));
-                    u.setCreadoEn(rs.getTimestamp("creado_en").toLocalDateTime());
-                    u.setActualizadoEn(rs.getTimestamp("actualizado_en").toLocalDateTime());
-                    u.setVersion(rs.getInt("version"));
-                    u.setSincronizadoDesde(SINCRONIZADO);
-                    usuarioRepository.save(u);
-                    nuevos++;
+                String nombreUsuario = rs.getString("nombre_usuario");
+                String contrasena = rs.getString("contraseña");
+                String nombreCompleto = rs.getString("nombre_completo");
+                String rolStr = rs.getString("rol");
+                boolean activo = rs.getBoolean("activo");
+                LocalDateTime creadoEn = rs.getTimestamp("creado_en").toLocalDateTime();
+                LocalDateTime actualizadoEn = rs.getTimestamp("actualizado_en").toLocalDateTime();
+                int version = rs.getInt("version");
+
+                // 1) Buscar por UUID primero
+                Optional<Usuario> existentePorUuid = usuarioRepository.findByUuid(uuid);
+                if (existentePorUuid.isPresent()) {
+                    // Existe localmente con el mismo UUID → actualizar si el remoto es más reciente
+                    Usuario local = existentePorUuid.get();
+                    if (local.getActualizadoEn() == null || actualizadoEn.isAfter(local.getActualizadoEn())) {
+                        local.setNombreCompleto(nombreCompleto);
+                        if (rolStr != null) local.setRol(Rol.valueOf(rolStr));
+                        local.setActivo(activo);
+                        local.setActualizadoEn(actualizadoEn);
+                        local.setVersion(version);
+                        local.setSincronizadoDesde(SINCRONIZADO);
+                        usuarioRepository.save(local);
+                        actualizados++;
+                    }
+                    continue;
                 }
+
+                // 2) No existe por UUID → revisar si hay colisión por nombre_usuario
+                Optional<Usuario> existentePorNombre = usuarioRepository.findByNombreUsuario(nombreUsuario);
+                if (existentePorNombre.isPresent()) {
+                    // Hay un usuario local con el mismo nombre pero UUID distinto.
+                    // Adoptamos el UUID remoto para alinear ambas BD.
+                    Usuario local = existentePorNombre.get();
+                    local.setUuid(uuid);
+                    local.setNombreCompleto(nombreCompleto);
+                    if (rolStr != null) local.setRol(Rol.valueOf(rolStr));
+                    local.setActivo(activo);
+                    local.setActualizadoEn(actualizadoEn);
+                    local.setVersion(version);
+                    local.setSincronizadoDesde(SINCRONIZADO);
+                    usuarioRepository.save(local);
+                    adoptados++;
+                    continue;
+                }
+
+                // 3) No existe ni por UUID ni por nombre → crear nuevo
+                Usuario u = new Usuario();
+                u.setUuid(uuid);
+                u.setNombreUsuario(nombreUsuario);
+                u.setContraseña(contrasena);
+                u.setNombreCompleto(nombreCompleto);
+                if (rolStr != null) u.setRol(Rol.valueOf(rolStr));
+                u.setActivo(activo);
+                u.setCreadoEn(creadoEn);
+                u.setActualizadoEn(actualizadoEn);
+                u.setVersion(version);
+                u.setSincronizadoDesde(SINCRONIZADO);
+                usuarioRepository.save(u);
+                nuevos++;
             }
         }
-        System.out.println("Usuarios descargados de Supabase: " + nuevos);
+
+        System.out.println("Usuarios → nuevos: " + nuevos
+                + ", actualizados: " + actualizados
+                + ", adoptados: " + adoptados);
     }
 
     private void descargarVentas(Connection remota) throws SQLException {
@@ -572,5 +725,53 @@ public class SincronizacionService {
             }
         }
         System.out.println("Ventas descargadas de Supabase: " + nuevas);
+    }
+
+    private void descargarAbonos(Connection remota) throws SQLException {
+        String sql = """
+        SELECT a.uuid, a.monto, a.metodo_pago, a.fecha, a.observaciones,
+               a.creado_en, a.actualizado_en, a.version,
+               c.uuid as cliente_uuid, v.uuid as venta_uuid, u.uuid as usuario_uuid
+        FROM abonos a
+        JOIN clientes c ON a.cliente_id = c.id
+        LEFT JOIN ventas v ON a.venta_id = v.id
+        JOIN usuarios u ON a.usuario_id = u.id
+        """;
+        int nuevos = 0;
+        try (PreparedStatement ps = remota.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                UUID uuid = UUID.fromString(rs.getString("uuid"));
+                if (abonoRepository.findByUuid(uuid).isEmpty()) {
+                    Abono a = new Abono();
+                    a.setUuid(uuid);
+                    a.setMonto(rs.getBigDecimal("monto"));
+                    String metodoPago = rs.getString("metodo_pago");
+                    if (metodoPago != null) a.setMetodoPago(MetodoPago.valueOf(metodoPago));
+                    a.setFecha(rs.getTimestamp("fecha").toLocalDateTime());
+                    a.setObservaciones(rs.getString("observaciones"));
+                    a.setCreadoEn(rs.getTimestamp("creado_en").toLocalDateTime());
+                    a.setActualizadoEn(rs.getTimestamp("actualizado_en").toLocalDateTime());
+                    a.setVersion(rs.getInt("version"));
+                    a.setSincronizadoDesde(SINCRONIZADO);
+
+                    clienteRepository.findByUuid(UUID.fromString(rs.getString("cliente_uuid")))
+                            .ifPresent(a::setCliente);
+
+                    String ventaUuid = rs.getString("venta_uuid");
+                    if (ventaUuid != null) {
+                        ventaRepository.findByUuid(UUID.fromString(ventaUuid))
+                                .ifPresent(a::setVenta);
+                    }
+
+                    usuarioRepository.findByUuid(UUID.fromString(rs.getString("usuario_uuid")))
+                            .ifPresent(a::setUsuario);
+
+                    abonoRepository.save(a);
+                    nuevos++;
+                }
+            }
+        }
+        System.out.println("Abonos descargados de Supabase: " + nuevos);
     }
 }
