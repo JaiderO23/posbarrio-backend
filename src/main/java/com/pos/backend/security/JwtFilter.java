@@ -29,12 +29,8 @@ public class JwtFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         String authHeader = request.getHeader("Authorization");
 
-        System.out.println("===== JWT FILTER =====");
-        System.out.println("Path: " + path);
-        System.out.println("Auth header: " + (authHeader != null ? authHeader.substring(0, Math.min(30, authHeader.length())) + "..." : "NULL"));
-
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            System.out.println("Sin token, dejando pasar");
+
             filterChain.doFilter(request, response);
             return;
         }
@@ -42,17 +38,13 @@ public class JwtFilter extends OncePerRequestFilter {
         String token = authHeader.substring(7);
 
         if (!jwtUtil.validarToken(token)) {
-            System.out.println("TOKEN INVÁLIDO - dejando pasar como anónimo");
+
             filterChain.doFilter(request, response);
             return;
         }
 
         String nombreUsuario = jwtUtil.extraerNombreUsuario(token);
         String rol = jwtUtil.extraerRol(token);
-
-        System.out.println("Usuario: " + nombreUsuario);
-        System.out.println("Rol extraído: " + rol);
-        System.out.println("Authority asignada: ROLE_" + rol);
 
         UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(
@@ -62,8 +54,6 @@ public class JwtFilter extends OncePerRequestFilter {
                 );
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
-        System.out.println("Autenticación establecida ✓");
-        System.out.println("======================");
 
         filterChain.doFilter(request, response);
     }
