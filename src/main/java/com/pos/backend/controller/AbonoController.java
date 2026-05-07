@@ -1,6 +1,7 @@
 package com.pos.backend.controller;
 
 import com.pos.backend.dto.request.AbonoRequest;
+import com.pos.backend.dto.response.AbonoResponse;
 import com.pos.backend.model.Abono;
 import com.pos.backend.model.Cliente;
 import com.pos.backend.model.Usuario;
@@ -11,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -18,6 +20,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/abonos")
@@ -27,69 +30,69 @@ public class AbonoController {
 
     private final AbonoService abonoService;
 
-
     @PostMapping
-    public ResponseEntity<Abono> registrarAbono(@Valid @RequestBody AbonoRequest request) {
-        // Construir entidad Abono desde el DTO
+    @Transactional
+    public ResponseEntity<AbonoResponse> registrarAbono(@Valid @RequestBody AbonoRequest request) {
         Abono abono = new Abono();
 
-        // Cliente
         Cliente cliente = new Cliente();
         cliente.setId(request.getClienteId());
         abono.setCliente(cliente);
 
-        // Venta (opcional)
         if (request.getVentaId() != null) {
             Venta venta = new Venta();
             venta.setId(request.getVentaId());
             abono.setVenta(venta);
         }
 
-        // Usuario (cajero)
         Usuario usuario = new Usuario();
         usuario.setId(request.getUsuarioId());
         abono.setUsuario(usuario);
 
-        // Datos del abono
         abono.setMonto(request.getMonto());
         abono.setMetodoPago(request.getMetodoPago());
         abono.setObservaciones(request.getObservaciones());
 
-        // Registrar abono
         Abono nuevoAbono = abonoService.registrarAbono(abono);
-        return ResponseEntity.status(HttpStatus.CREATED).body(nuevoAbono);
+        return ResponseEntity.status(HttpStatus.CREATED).body(AbonoResponse.fromEntity(nuevoAbono));
     }
-
 
     @GetMapping
-    public ResponseEntity<List<Abono>> obtenerTodos() {
-        List<Abono> abonos = abonoService.obtenerTodos();
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<AbonoResponse>> obtenerTodos() {
+        List<AbonoResponse> abonos = abonoService.obtenerTodos().stream()
+                .map(AbonoResponse::fromEntity)
+                .collect(Collectors.toList());
         return ResponseEntity.ok(abonos);
     }
-
 
     @GetMapping("/{id}")
-    public ResponseEntity<Abono> obtenerPorId(@PathVariable Long id) {
+    @Transactional(readOnly = true)
+    public ResponseEntity<AbonoResponse> obtenerPorId(@PathVariable Long id) {
         Abono abono = abonoService.obtenerPorId(id);
-        return ResponseEntity.ok(abono);
+        return ResponseEntity.ok(AbonoResponse.fromEntity(abono));
     }
-
 
     @GetMapping("/cliente/{clienteId}")
-    public ResponseEntity<List<Abono>> obtenerPorCliente(@PathVariable Long clienteId) {
-        List<Abono> abonos = abonoService.obtenerPorCliente(clienteId);
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<AbonoResponse>> obtenerPorCliente(@PathVariable Long clienteId) {
+        List<AbonoResponse> abonos = abonoService.obtenerPorCliente(clienteId).stream()
+                .map(AbonoResponse::fromEntity)
+                .collect(Collectors.toList());
         return ResponseEntity.ok(abonos);
     }
-
 
     @GetMapping("/venta/{ventaId}")
-    public ResponseEntity<List<Abono>> obtenerPorVenta(@PathVariable Long ventaId) {
-        List<Abono> abonos = abonoService.obtenerPorVenta(ventaId);
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<AbonoResponse>> obtenerPorVenta(@PathVariable Long ventaId) {
+        List<AbonoResponse> abonos = abonoService.obtenerPorVenta(ventaId).stream()
+                .map(AbonoResponse::fromEntity)
+                .collect(Collectors.toList());
         return ResponseEntity.ok(abonos);
     }
 
-
     @GetMapping("/venta/{ventaId}/saldo")
+    @Transactional(readOnly = true)
     public ResponseEntity<Map<String, Object>> obtenerSaldoVenta(@PathVariable Long ventaId) {
         BigDecimal totalPagado = abonoService.totalAbonosVenta(ventaId);
         BigDecimal saldoPendiente = abonoService.saldoPendienteVenta(ventaId);
@@ -102,43 +105,51 @@ public class AbonoController {
         return ResponseEntity.ok(saldo);
     }
 
-
     @GetMapping("/usuario/{usuarioId}")
-    public ResponseEntity<List<Abono>> obtenerPorUsuario(@PathVariable Long usuarioId) {
-        List<Abono> abonos = abonoService.obtenerPorUsuario(usuarioId);
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<AbonoResponse>> obtenerPorUsuario(@PathVariable Long usuarioId) {
+        List<AbonoResponse> abonos = abonoService.obtenerPorUsuario(usuarioId).stream()
+                .map(AbonoResponse::fromEntity)
+                .collect(Collectors.toList());
         return ResponseEntity.ok(abonos);
     }
-
 
     @GetMapping("/hoy")
-    public ResponseEntity<List<Abono>> obtenerAbonosHoy() {
-        List<Abono> abonos = abonoService.obtenerAbonosHoy();
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<AbonoResponse>> obtenerAbonosHoy() {
+        List<AbonoResponse> abonos = abonoService.obtenerAbonosHoy().stream()
+                .map(AbonoResponse::fromEntity)
+                .collect(Collectors.toList());
         return ResponseEntity.ok(abonos);
     }
-
 
     @GetMapping("/fecha")
-    public ResponseEntity<List<Abono>> obtenerPorRangoFechas(
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<AbonoResponse>> obtenerPorRangoFechas(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime inicio,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fin) {
-        List<Abono> abonos = abonoService.obtenerPorRangoFechas(inicio, fin);
+        List<AbonoResponse> abonos = abonoService.obtenerPorRangoFechas(inicio, fin).stream()
+                .map(AbonoResponse::fromEntity)
+                .collect(Collectors.toList());
         return ResponseEntity.ok(abonos);
     }
 
-
     @GetMapping("/estadisticas/hoy")
+    @Transactional(readOnly = true)
     public ResponseEntity<Map<String, Object>> estadisticasDelDia() {
         Map<String, Object> estadisticas = new HashMap<>();
 
         estadisticas.put("cantidadAbonos", abonoService.contarAbonosDelDia());
         estadisticas.put("totalRecaudado", abonoService.totalAbonosDelDia());
-        estadisticas.put("abonos", abonoService.obtenerAbonosHoy());
+        estadisticas.put("abonos", abonoService.obtenerAbonosHoy().stream()
+                .map(AbonoResponse::fromEntity)
+                .collect(Collectors.toList()));
 
         return ResponseEntity.ok(estadisticas);
     }
 
-
     @PostMapping("/{id}/cancelar")
+    @Transactional
     public ResponseEntity<Void> cancelarAbono(
             @PathVariable Long id,
             @RequestParam(required = false) String motivo) {
@@ -146,7 +157,6 @@ public class AbonoController {
         abonoService.cancelarAbono(id, motivoCancelacion);
         return ResponseEntity.ok().build();
     }
-
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> eliminar(@PathVariable Long id) {

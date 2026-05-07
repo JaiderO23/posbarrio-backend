@@ -26,29 +26,34 @@ public class JwtFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        // Obtener el header Authorization
+        String path = request.getRequestURI();
         String authHeader = request.getHeader("Authorization");
 
-        // Si no tiene token, dejar pasar (SecurityConfig decide si es permitido)
+        System.out.println("===== JWT FILTER =====");
+        System.out.println("Path: " + path);
+        System.out.println("Auth header: " + (authHeader != null ? authHeader.substring(0, Math.min(30, authHeader.length())) + "..." : "NULL"));
+
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            System.out.println("Sin token, dejando pasar");
             filterChain.doFilter(request, response);
             return;
         }
 
-        // Extraer el token (quitar "Bearer ")
         String token = authHeader.substring(7);
 
-        // Validar token
         if (!jwtUtil.validarToken(token)) {
+            System.out.println("TOKEN INVÁLIDO - dejando pasar como anónimo");
             filterChain.doFilter(request, response);
             return;
         }
 
-        // Extraer datos del token
         String nombreUsuario = jwtUtil.extraerNombreUsuario(token);
         String rol = jwtUtil.extraerRol(token);
 
-        // Crear autenticación con el rol
+        System.out.println("Usuario: " + nombreUsuario);
+        System.out.println("Rol extraído: " + rol);
+        System.out.println("Authority asignada: ROLE_" + rol);
+
         UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(
                         nombreUsuario,
@@ -56,8 +61,9 @@ public class JwtFilter extends OncePerRequestFilter {
                         List.of(new SimpleGrantedAuthority("ROLE_" + rol))
                 );
 
-        // Registrar en el contexto de seguridad
         SecurityContextHolder.getContext().setAuthentication(authentication);
+        System.out.println("Autenticación establecida ✓");
+        System.out.println("======================");
 
         filterChain.doFilter(request, response);
     }

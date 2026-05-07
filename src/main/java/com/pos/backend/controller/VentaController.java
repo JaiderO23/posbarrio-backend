@@ -1,6 +1,7 @@
 package com.pos.backend.controller;
 
 import com.pos.backend.dto.request.VentaRequest;
+import com.pos.backend.dto.response.VentaResponse;
 import com.pos.backend.enums.EstadoVenta;
 import com.pos.backend.enums.TipoVenta;
 import com.pos.backend.model.Cliente;
@@ -17,15 +18,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/ventas")
@@ -38,171 +40,179 @@ public class VentaController {
     private final UsuarioService usuarioService;
     private final ProductoService productoService;
 
-
     // POST - Crear nueva venta
     @PostMapping
-    public ResponseEntity<Venta> crearVenta(@Valid @RequestBody VentaRequest request) {
-        // Construir entidad Venta desde el DTO
+    @Transactional
+    public ResponseEntity<VentaResponse> crearVenta(@Valid @RequestBody VentaRequest request) {
         Venta venta = new Venta();
 
-        // Cliente (opcional)
         if (request.getClienteId() != null) {
             Cliente cliente = new Cliente();
             cliente.setId(request.getClienteId());
             venta.setCliente(cliente);
         }
 
-        // Usuario (cajero) - obligatorio
         Usuario usuario = new Usuario();
         usuario.setId(request.getUsuarioId());
         venta.setUsuario(usuario);
 
-        // Tipo y método de pago
         venta.setTipoVenta(request.getTipoVenta());
         venta.setMetodoPago(request.getMetodoPago());
         venta.setDescuento(request.getDescuento());
         venta.setObservaciones(request.getObservaciones());
 
-        // Construir detalles
         List<DetalleVenta> detalles = new ArrayList<>();
         for (VentaRequest.DetalleVentaRequest detalleReq : request.getDetalles()) {
             DetalleVenta detalle = new DetalleVenta();
-
-            // Producto
             Producto producto = new Producto();
             producto.setId(detalleReq.getProductoId());
             detalle.setProducto(producto);
-
             detalle.setCantidad(detalleReq.getCantidad());
             detalle.setPrecioUnitario(detalleReq.getPrecioUnitario());
-
             detalles.add(detalle);
         }
         venta.setDetalles(detalles);
 
-        // Crear venta
         Venta nuevaVenta = ventaService.crearVenta(venta);
-        return ResponseEntity.status(HttpStatus.CREATED).body(nuevaVenta);
+        return ResponseEntity.status(HttpStatus.CREATED).body(VentaResponse.fromEntity(nuevaVenta));
     }
 
     // GET - Obtener todas las ventas
     @GetMapping
-    public ResponseEntity<List<Venta>> obtenerTodas() {
-        List<Venta> ventas = ventaService.obtenerTodas();
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<VentaResponse>> obtenerTodas() {
+        List<VentaResponse> ventas = ventaService.obtenerTodas().stream()
+                .map(VentaResponse::fromEntity)
+                .collect(Collectors.toList());
         return ResponseEntity.ok(ventas);
     }
 
-
     // GET - Obtener venta por ID
     @GetMapping("/{id}")
-    public ResponseEntity<Venta> obtenerPorId(@PathVariable Long id) {
+    @Transactional(readOnly = true)
+    public ResponseEntity<VentaResponse> obtenerPorId(@PathVariable Long id) {
         Venta venta = ventaService.obtenerPorId(id);
-        return ResponseEntity.ok(venta);
+        return ResponseEntity.ok(VentaResponse.fromEntity(venta));
     }
 
     // GET - Obtener venta por UUID
     @GetMapping("/uuid/{uuid}")
-    public ResponseEntity<Venta> obtenerPorUuid(@PathVariable UUID uuid) {
+    @Transactional(readOnly = true)
+    public ResponseEntity<VentaResponse> obtenerPorUuid(@PathVariable UUID uuid) {
         Venta venta = ventaService.obtenerPorUuid(uuid);
-        return ResponseEntity.ok(venta);
+        return ResponseEntity.ok(VentaResponse.fromEntity(venta));
     }
-
 
     // GET - Obtener venta por número
     @GetMapping("/numero/{numeroVenta}")
-    public ResponseEntity<Venta> obtenerPorNumero(@PathVariable String numeroVenta) {
+    @Transactional(readOnly = true)
+    public ResponseEntity<VentaResponse> obtenerPorNumero(@PathVariable String numeroVenta) {
         Venta venta = ventaService.obtenerPorNumeroVenta(numeroVenta);
-        return ResponseEntity.ok(venta);
+        return ResponseEntity.ok(VentaResponse.fromEntity(venta));
     }
 
-    // GET - Obtener ventas de un cliente
+    // GET - Ventas de un cliente
     @GetMapping("/cliente/{clienteId}")
-    public ResponseEntity<List<Venta>> obtenerPorCliente(@PathVariable Long clienteId) {
-        List<Venta> ventas = ventaService.obtenerPorCliente(clienteId);
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<VentaResponse>> obtenerPorCliente(@PathVariable Long clienteId) {
+        List<VentaResponse> ventas = ventaService.obtenerPorCliente(clienteId).stream()
+                .map(VentaResponse::fromEntity)
+                .collect(Collectors.toList());
         return ResponseEntity.ok(ventas);
     }
 
-
-    // GET - Obtener ventas de un usuario (cajero)
+    // GET - Ventas de un usuario
     @GetMapping("/usuario/{usuarioId}")
-    public ResponseEntity<List<Venta>> obtenerPorUsuario(@PathVariable Long usuarioId) {
-        List<Venta> ventas = ventaService.obtenerPorUsuario(usuarioId);
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<VentaResponse>> obtenerPorUsuario(@PathVariable Long usuarioId) {
+        List<VentaResponse> ventas = ventaService.obtenerPorUsuario(usuarioId).stream()
+                .map(VentaResponse::fromEntity)
+                .collect(Collectors.toList());
         return ResponseEntity.ok(ventas);
     }
 
-
-    // GET - Obtener ventas por tipo (CONTADO/CREDITO)
+    // GET - Ventas por tipo
     @GetMapping("/tipo/{tipoVenta}")
-    public ResponseEntity<List<Venta>> obtenerPorTipo(@PathVariable TipoVenta tipoVenta) {
-        List<Venta> ventas = ventaService.obtenerPorTipo(tipoVenta);
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<VentaResponse>> obtenerPorTipo(@PathVariable TipoVenta tipoVenta) {
+        List<VentaResponse> ventas = ventaService.obtenerPorTipo(tipoVenta).stream()
+                .map(VentaResponse::fromEntity)
+                .collect(Collectors.toList());
         return ResponseEntity.ok(ventas);
     }
 
-    // GET - Obtener ventas del día
+    // GET - Ventas del día
     @GetMapping("/hoy")
-    public ResponseEntity<List<Venta>> obtenerVentasHoy() {
-        List<Venta> ventas = ventaService.obtenerVentasHoy();
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<VentaResponse>> obtenerVentasHoy() {
+        List<VentaResponse> ventas = ventaService.obtenerVentasHoy().stream()
+                .map(VentaResponse::fromEntity)
+                .collect(Collectors.toList());
         return ResponseEntity.ok(ventas);
     }
 
-    // GET - Obtener ventas por rango de fechas
+    // GET - Ventas por rango de fechas
     @GetMapping("/fecha")
-    public ResponseEntity<List<Venta>> obtenerPorRangoFechas(
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<VentaResponse>> obtenerPorRangoFechas(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime inicio,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fin) {
-        List<Venta> ventas = ventaService.obtenerPorRangoFechas(inicio, fin);
+        List<VentaResponse> ventas = ventaService.obtenerPorRangoFechas(inicio, fin).stream()
+                .map(VentaResponse::fromEntity)
+                .collect(Collectors.toList());
         return ResponseEntity.ok(ventas);
     }
 
-
-    // GET - Obtener ventas de un mes
+    // GET - Ventas de un mes
     @GetMapping("/mes")
-    public ResponseEntity<List<Venta>> obtenerVentasPorMes(
+    @Transactional(readOnly = true)
+    public ResponseEntity<List<VentaResponse>> obtenerVentasPorMes(
             @RequestParam int año,
             @RequestParam int mes) {
-        List<Venta> ventas = ventaService.obtenerVentasPorMes(año, mes);
+        List<VentaResponse> ventas = ventaService.obtenerVentasPorMes(año, mes).stream()
+                .map(VentaResponse::fromEntity)
+                .collect(Collectors.toList());
         return ResponseEntity.ok(ventas);
     }
 
-
-    // PATCH - Cambiar estado de venta
+    // PATCH - Cambiar estado
     @PatchMapping("/{id}/estado")
-    public ResponseEntity<Venta> cambiarEstado(
+    @Transactional
+    public ResponseEntity<VentaResponse> cambiarEstado(
             @PathVariable Long id,
             @RequestParam EstadoVenta estado) {
         Venta venta = ventaService.cambiarEstado(id, estado);
-        return ResponseEntity.ok(venta);
+        return ResponseEntity.ok(VentaResponse.fromEntity(venta));
     }
-
 
     // POST - Cancelar venta
     @PostMapping("/{id}/cancelar")
-    public ResponseEntity<Venta> cancelarVenta(
+    @Transactional
+    public ResponseEntity<VentaResponse> cancelarVenta(
             @PathVariable Long id,
             @RequestParam(required = false) String motivo) {
         String motivoCancelacion = motivo != null ? motivo : "Sin motivo especificado";
         Venta venta = ventaService.cancelarVenta(id, motivoCancelacion);
-        return ResponseEntity.ok(venta);
+        return ResponseEntity.ok(VentaResponse.fromEntity(venta));
     }
 
-
-    // DELETE - Eliminar venta (solo canceladas)
+    // DELETE
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> eliminarVenta(@PathVariable Long id) {
         ventaService.eliminarVenta(id);
         return ResponseEntity.noContent().build();
     }
 
-
     // GET - Estadísticas del día
     @GetMapping("/estadisticas/hoy")
+    @Transactional(readOnly = true)
     public ResponseEntity<Map<String, Object>> estadisticasDelDia() {
         Map<String, Object> estadisticas = new HashMap<>();
-
         estadisticas.put("cantidadVentas", ventaService.contarVentasDelDia());
         estadisticas.put("totalVendido", ventaService.totalVentasDelDia());
-        estadisticas.put("ventas", ventaService.obtenerVentasHoy());
-
+        estadisticas.put("ventas", ventaService.obtenerVentasHoy().stream()
+                .map(VentaResponse::fromEntity)
+                .collect(Collectors.toList()));
         return ResponseEntity.ok(estadisticas);
     }
 }

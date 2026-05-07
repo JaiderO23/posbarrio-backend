@@ -47,6 +47,7 @@ public class JwtUtil {
             getClaims(token);
             return true;
         } catch (Exception e) {
+            System.out.println("ERROR validando token: " + e.getClass().getSimpleName() + " - " + e.getMessage());
             return false;
         }
     }
